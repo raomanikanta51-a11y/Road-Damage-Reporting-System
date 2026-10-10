@@ -1,0 +1,1167 @@
+const RKEY = "roadwatch.reports";
+const UKEY = "roadwatch.user";
+const DEFAULT_USER = null;
+
+const seedReports = [
+  {
+    id: "r1",
+    location: "MG Road, near Metro Pillar 42",
+    damageType: "Pothole",
+    severity: "high",
+    description: "Deep pothole causing two-wheelers to swerve into traffic.",
+    status: "in-progress",
+    reporter: "Asha",
+    createdAt: Date.now() - 86400000 * 2,
+  },
+  {
+    id: "r2",
+    location: "Ring Road Exit 7",
+    damageType: "Waterlogging",
+    severity: "medium",
+    description: "Water collects after every rain, hiding the road surface.",
+    status: "reported",
+    reporter: "Ravi",
+    createdAt: Date.now() - 86400000,
+  },
+  {
+    id: "r3",
+    location: "Station Road, Sector 12",
+    damageType: "Missing Manhole",
+    severity: "high",
+    description: "Open manhole without any barricade.",
+    status: "resolved",
+    reporter: "Meera",
+    createdAt: Date.now() - 86400000 * 5,
+  },
+];
+
+const state = {
+  route: "home",
+  search: "",
+  status: "all",
+  editingId: null,
+};
+
+const themeStyles = `
+  :root {
+    --bg: #0f172a;
+    --panel: rgba(15, 23, 42, 0.72);
+    --panel-soft: rgba(148, 163, 184, 0.12);
+    --panel-strong: rgba(148, 163, 184, 0.2);
+    --text: #e2e8f0;
+    --muted: #cbd5e1;
+    --primary: #38bdf8;
+    --primary-strong: #0ea5e9;
+    --accent: #fbbf24;
+    --success: #34d399;
+    --danger: #f87171;
+    --border: rgba(148, 163, 184, 0.28);
+    --shadow: 0 20px 60px rgba(15, 23, 42, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    font-family: Inter, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.3), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(251, 191, 36, 0.18), transparent 24%),
+      linear-gradient(135deg, #020817, #0f172a 40%, #111827);
+    color: var(--text);
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  a, button, input, select, textarea {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  .app-shell {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 18px 40px;
+  }
+
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    background: rgba(15, 23, 42, 0.8);
+    border-radius: 18px;
+    backdrop-filter: blur(14px);
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 16px;
+    z-index: 2;
+  }
+
+  .brand {
+    margin-right: auto;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .brand .grad {
+    background: linear-gradient(90deg, var(--primary), #fbbf24);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    border-radius: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: 0.2s ease;
+    border: 1px solid transparent;
+  }
+
+  .nav-link.active,
+  .nav-link:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .user-pill {
+    margin-left: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(148, 163, 184, 0.08);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .danger-btn {
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 11px 18px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    display: inline-block;
+  }
+
+  .primary-btn {
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+    color: #04111d;
+  }
+
+  .secondary-btn {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .danger-btn {
+    background: rgba(248, 113, 113, 0.12);
+    color: #fecaca;
+    border: 1px solid rgba(248, 113, 113, 0.3);
+  }
+
+  .primary-btn:hover,
+  .secondary-btn:hover,
+  .danger-btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 28px;
+    align-items: center;
+    padding: 30px 0 20px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(148, 163, 184, 0.08);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--primary);
+    font-size: 0.73rem;
+    font-weight: 700;
+  }
+
+  h1, h2, h3 {
+    margin: 0 0 16px;
+    letter-spacing: -0.04em;
+  }
+
+  h1 {
+    font-size: clamp(2.8rem, 4vw, 5rem);
+    line-height: 0.98;
+  }
+
+  h2 {
+    font-size: clamp(2rem, 2vw, 2.6rem);
+  }
+
+  .summary {
+    margin: 0 0 20px;
+    color: var(--muted);
+    font-size: 1.08rem;
+    line-height: 1.6;
+    max-width: 650px;
+  }
+
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .panel {
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid var(--border);
+    border-radius: 26px;
+    box-shadow: var(--shadow);
+  }
+
+  .image-card {
+    overflow: hidden;
+    padding: 12px;
+  }
+
+  .image-card img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 360px;
+    object-fit: cover;
+    border-radius: 18px;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+
+  .stat-card {
+    padding: 20px 18px;
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .stat-number {
+    font-size: 2.3rem;
+    font-weight: 900;
+    background: linear-gradient(90deg, var(--primary), #fbbf24);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .stat-label {
+    color: var(--muted);
+  }
+
+  .step-grid,
+  .report-grid,
+  .page-grid {
+    display: grid;
+    gap: 16px;
+    margin-top: 18px;
+  }
+
+  .step-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .step-card,
+  .report-card,
+  .info-box,
+  .form-panel {
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .step-number {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: #fbbf24;
+    margin-bottom: 10px;
+  }
+
+  .report-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    margin-top: 18px;
+  }
+
+  .report-card {
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .report-image {
+    width: 100%;
+    height: 190px;
+    object-fit: cover;
+    display: block;
+    background: rgba(148, 163, 184, 0.08);
+  }
+
+  .report-body {
+    padding: 18px;
+  }
+
+  .report-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .report-tag,
+  .status-tag,
+  .severity-tag {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .report-tag {
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid var(--border);
+  }
+
+  .status-reported { background: rgba(148, 163, 184, 0.12); color: var(--text); }
+  .status-in-progress { background: rgba(251, 191, 36, 0.2); color: #fde68a; }
+  .status-resolved { background: rgba(52, 211, 153, 0.18); color: #a7f3d0; }
+  .severity-low { color: #86efac; }
+  .severity-medium { color: #fcd34d; }
+  .severity-high { color: #fca5a5; }
+
+  .muted {
+    color: var(--muted);
+  }
+
+  .report-details {
+    display: grid;
+    gap: 10px;
+    margin: 14px 0;
+    color: var(--muted);
+  }
+
+  .card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+
+  .field,
+  .select,
+  .textarea {
+    width: 100%;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    padding: 12px 14px;
+    outline: none;
+  }
+
+  .field:focus,
+  .select:focus,
+  .textarea:focus {
+    border-color: rgba(56, 189, 248, 0.8);
+    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+  }
+
+  .textarea {
+    min-height: 120px;
+    resize: vertical;
+  }
+
+  .form-panel {
+    max-width: 700px;
+    margin: 22px auto 0;
+  }
+
+  .form-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .row-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .inline-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .search-bar {
+    padding: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 8px 12px;
+    text-transform: capitalize;
+  }
+
+  .toggle.active {
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+    border-color: transparent;
+    color: #04111d;
+    font-weight: 800;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 46px 18px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  .page-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .list {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    color: var(--muted);
+    margin-top: 18px;
+    font-size: 0.88rem;
+  }
+
+  .upload-box {
+    border: 1px dashed var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    text-align: center;
+    color: var(--muted);
+    background: rgba(148, 163, 184, 0.04);
+  }
+
+  .upload-box img {
+    display: block;
+    margin: 0 auto 12px;
+    max-height: 220px;
+    max-width: 100%;
+    border-radius: 12px;
+    object-fit: cover;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+
+  @media (max-width: 840px) {
+    .hero,
+    .page-grid,
+    .stats,
+    .step-grid,
+    .row-2 {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
+
+const appRootId = "roadwatch-app";
+let appRoot = null;
+let activeRoute = "home";
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function readStorage(key, fallback) {
+  if (typeof localStorage === "undefined") return fallback;
+  try {
+    const value = localStorage.getItem(key);
+    if (!value) return fallback;
+    return JSON.parse(value);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function writeStorage(key, value) {
+  if (typeof localStorage === "undefined") return;
+  if (value === null) {
+    localStorage.removeItem(key);
+    return;
+  }
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getReports() {
+  const stored = readStorage(RKEY, null);
+  if (Array.isArray(stored) && stored.length) return stored;
+  writeStorage(RKEY, seedReports);
+  return [...seedReports];
+}
+
+function setReports(nextReports) {
+  writeStorage(RKEY, nextReports);
+}
+
+function getUser() {
+  return readStorage(UKEY, DEFAULT_USER);
+}
+
+function saveUser(user) {
+  writeStorage(UKEY, user);
+}
+
+function getRoute() {
+  const hash = window.location.hash.replace(/^#/, "").trim();
+  if (!hash || hash === "/") return "home";
+  const normalized = hash.replace(/^\//, "");
+  return normalized || "home";
+}
+
+function formatDate(value) {
+  return new Date(value).toLocaleDateString();
+}
+
+function getSummaryStats(reports) {
+  return [
+    { label: "Total reports", value: reports.length },
+    { label: "In progress", value: reports.filter((report) => report.status === "in-progress").length },
+    { label: "Resolved", value: reports.filter((report) => report.status === "resolved").length },
+    { label: "High severity", value: reports.filter((report) => report.severity === "high").length },
+  ];
+}
+
+function renderNav(user) {
+  const route = getRoute();
+  const menu = [
+    { route: "home", label: "Home" },
+    { route: "reports", label: "Reports" },
+    { route: "report", label: "Report Damage" },
+    { route: "about", label: "Project" },
+  ];
+
+  const links = menu
+    .map(({ route: target, label }) => {
+      const isActive = target === route ? "active" : "";
+      return `<a href="#/${target === "home" ? "" : target}" class="nav-link ${isActive}" data-route="${target}">${escapeHtml(label)}</a>`;
+    })
+    .join("");
+
+  const authBlock = user
+    ? `<button type="button" class="user-pill" data-action="logout">${escapeHtml(user.name)} · ${escapeHtml(user.role)} ✕</button>`
+    : `<a href="#/login" class="primary-btn" data-route="login">Sign in</a>`;
+
+  return `
+    <header class="nav" aria-label="Main navigation">
+      <a href="#/" class="brand" data-route="home"><span class="grad">#1</span> RoadWatch</a>
+      ${links}
+      ${authBlock}
+    </header>
+  `;
+}
+
+function renderHomePage(reports, user) {
+  const stats = getSummaryStats(reports);
+  const steps = ["Spot the damage", "Snap & describe", "Pin the location", "Track the fix"];
+
+  return `
+    <main class="app-shell">
+      ${renderNav(user)}
+      <section class="hero">
+        <div>
+          <span class="eyebrow">Hackathon Project #39 · Smart City</span>
+          <h1>Every pothole <span class="grad">reported.</span> Every road <span class="grad">fixed.</span></h1>
+          <p class="summary">RoadWatch lets citizens report damaged roads in seconds and gives authorities one live board to prioritise repairs.</p>
+          <div class="cta-row">
+            <a href="#/report" class="primary-btn" data-route="report">Report damage</a>
+            <a href="#/reports" class="secondary-btn" data-route="reports">View reports</a>
+          </div>
+        </div>
+        <div class="panel image-card">
+          <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1200&q=80" alt="City road with highlighted potholes" />
+        </div>
+      </section>
+
+      <section class="stats" aria-label="Summary stats">
+        ${stats
+          .map(
+            (stat) => `
+              <div class="panel stat-card">
+                <div class="stat-number">${String(stat.value).padStart(2, "0")}</div>
+                <div class="stat-label">${escapeHtml(stat.label)}</div>
+              </div>
+            `,
+          )
+          .join("")}
+      </section>
+
+      <section>
+        <h2>How it works</h2>
+        <div class="step-grid">
+          ${steps
+            .map(
+              (step, index) => `
+                <div class="step-card">
+                  <div class="step-number">0${index + 1}</div>
+                  <div class="step-title">${escapeHtml(step)}</div>
+                </div>
+              `,
+            )
+            .join("")}
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+function renderLoginPage(user) {
+  return `
+    <main class="app-shell">
+      ${renderNav(user)}
+      <div class="form-panel">
+        <form data-form="login" class="form-grid">
+          <h2>Welcome back</h2>
+          <input class="field" name="name" type="text" placeholder="Your name" required />
+          <div class="row-2">
+            <label class="toggle active">
+              <input class="sr-only" type="radio" name="role" value="citizen" checked />
+              Citizen
+            </label>
+            <label class="toggle">
+              <input class="sr-only" type="radio" name="role" value="admin" />
+              Admin
+            </label>
+          </div>
+          <button type="submit" class="primary-btn">Continue</button>
+        </form>
+      </div>
+    </main>
+  `;
+}
+
+function renderReportPage(user) {
+  if (!user) {
+    return `
+      <main class="app-shell">
+        ${renderNav(null)}
+        <div class="form-panel" style="text-align:center;">
+          <h2>Sign in to report</h2>
+          <p class="muted">You need to log in before submitting roadside damage reports.</p>
+          <a href="#/login" class="primary-btn" data-route="login">Sign in</a>
+        </div>
+      </main>
+    `;
+  }
+
+  return `
+    <main class="app-shell">
+      ${renderNav(user)}
+      <div class="form-panel">
+        <form data-form="report-create" class="form-grid">
+          <h2>Report <span class="grad">road damage</span></h2>
+          <div class="inline-row">
+            <input class="field" type="text" name="location" placeholder="Location / landmark" required />
+            <button type="button" class="secondary-btn" data-action="locate-gps">📍 GPS</button>
+          </div>
+          <div class="row-2">
+            <select class="select" name="damageType">
+              <option>Pothole</option>
+              <option>Crack</option>
+              <option>Waterlogging</option>
+              <option>Broken Divider</option>
+              <option>Missing Manhole</option>
+              <option>Other</option>
+            </select>
+            <select class="select" name="severity">
+              <option value="low">Low severity</option>
+              <option value="medium" selected>Medium severity</option>
+              <option value="high">High severity</option>
+            </select>
+          </div>
+          <textarea class="textarea" name="description" placeholder="Describe the damage" required></textarea>
+          <label class="upload-box">
+            <span>📷 Click to upload a photo</span>
+            <input class="sr-only" type="file" name="photo" accept="image/*" />
+          </label>
+          <button type="submit" class="primary-btn">Submit report</button>
+        </form>
+      </div>
+    </main>
+  `;
+}
+
+function renderAboutPage(user) {
+  const objectives = [
+    "Full-stack web development",
+    "CRUD operations on road damage records",
+    "REST-style data operations",
+    "Responsive React frontend",
+    "Authentication with citizen / admin roles",
+    "Clear display of project information and results",
+  ];
+
+  const api = [
+    ["GET", "/api/reports", "List all reports"],
+    ["POST", "/api/reports", "Create a report"],
+    ["PUT", "/api/reports/:id", "Update report / status"],
+    ["DELETE", "/api/reports/:id", "Delete report (admin)"],
+  ];
+
+  return `
+    <main class="app-shell">
+      ${renderNav(user)}
+      <div class="panel" style="padding:26px; margin-top:22px;">
+        <div class="muted" style="letter-spacing:0.12em; text-transform: uppercase; font-weight:700; font-size:0.74rem; color: var(--primary);">Problem #39</div>
+        <h1 style="margin-top:12px;">Road Damage <span class="grad">Reporting</span></h1>
+        <p class="summary">Report potholes and damaged roads. The system manages location, damage type, image and description, and supports adding, viewing, updating and managing records.</p>
+      </div>
+
+      <div class="page-grid">
+        <div class="info-box">
+          <h2>Objectives</h2>
+          <ol class="list">
+            ${objectives.map((item, index) => `<li><strong style="color:#fbbf24;">0${index + 1}</strong> ${escapeHtml(item)}</li>`).join("")}
+          </ol>
+        </div>
+        <div class="info-box">
+          <h2>API design</h2>
+          <div class="form-grid">
+            ${api
+              .map(
+                ([method, path, detail]) => `
+                  <div class="inline-row" style="justify-content:space-between; border:1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: rgba(148,163,184,0.04);">
+                    <strong style="color: var(--primary); width:52px;">${escapeHtml(method)}</strong>
+                    <span style="flex:1;">${escapeHtml(path)}</span>
+                    <span class="muted">${escapeHtml(detail)}</span>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
+        </div>
+      </div>
+    </main>
+  `;
+}
+
+function renderReportsPage(user) {
+  const reports = getReports();
+  const filtered = reports.filter((report) => {
+    const matchStatus = state.status === "all" || report.status === state.status;
+    const summary = `${report.location} ${report.description} ${report.damageType}`.toLowerCase();
+    const matchText = summary.includes(state.search.toLowerCase());
+    return matchStatus && matchText;
+  });
+
+  const statusOptions = ["all", "reported", "in-progress", "resolved"];
+
+  return `
+    <main class="app-shell">
+      ${renderNav(user)}
+      <div style="margin-top:22px;">
+        <div class="inline-row" style="justify-content: space-between; align-items:flex-end;">
+          <div>
+            <h2>Live <span class="grad">reports</span></h2>
+            <div class="muted">${filtered.length} of ${reports.length} shown ${user && user.role === "admin" ? "· admin mode" : ""}</div>
+          </div>
+          <a href="#/report" class="primary-btn" data-route="report">+ New report</a>
+        </div>
+
+        <div class="search-bar">
+          <input class="field" type="search" value="${escapeHtml(state.search)}" data-search-input placeholder="Search location, type…" style="flex:1; min-width: 200px;" />
+          ${statusOptions
+            .map(
+              (option) => `
+                <button type="button" class="toggle ${state.status === option ? "active" : ""}" data-status-filter="${option}">${escapeHtml(option)}</button>
+              `,
+            )
+            .join("")}
+        </div>
+      </div>
+
+      <div class="report-grid">
+        ${
+          filtered.length
+            ? filtered
+                .map((report, index) => {
+                  const canEdit = !!user && (user.role === "admin" || user.name === report.reporter);
+                  const imageBlock = report.image
+                    ? `<img class="report-image" src="${report.image}" alt="${escapeHtml(report.damageType)}" />`
+                    : `<div class="report-image" style="display:flex; align-items:center; justify-content:center; font-size:2.6rem; font-weight:900; background:linear-gradient(135deg, rgba(56,189,248,0.12), rgba(251,191,36,0.08)); color:var(--primary);">#${String(index + 1).padStart(2, "0")}</div>`;
+
+                  const severityClass = `severity-${report.severity}`;
+                  const statusClass = `status-${report.status}`;
+                  const editControls = state.editingId === report.id
+                    ? `
+                      <form data-form="report-edit" style="display:grid; gap:10px; margin-top:12px;">
+                        <input type="hidden" name="reportId" value="${report.id}" />
+                        <input class="field" type="text" name="location" value="${escapeHtml(report.location)}" required />
+                        <textarea class="textarea" name="description" required>${escapeHtml(report.description)}</textarea>
+                        <button type="submit" class="primary-btn">Save</button>
+                      </form>
+                    `
+                    : `
+                      <div class="report-details">
+                        <div>📍 ${escapeHtml(report.location)}</div>
+                        <p class="muted" style="margin:0;">${escapeHtml(report.description)}</p>
+                      </div>
+                    `;
+
+                  return `
+                    <article class="report-card">
+                      ${imageBlock}
+                      <div class="report-body">
+                        <div class="report-head">
+                          <span class="report-tag">${escapeHtml(report.damageType)}</span>
+                          <span class="status-tag ${statusClass}">${escapeHtml(report.status)}</span>
+                        </div>
+                        ${editControls}
+                        <div class="meta-row">
+                          <span class="severity-tag ${severityClass}">${escapeHtml(report.severity)}</span>
+                          <span>${escapeHtml(report.reporter)} · ${formatDate(report.createdAt)}</span>
+                        </div>
+                        ${canEdit ? `
+                          <div class="card-actions">
+                            ${user && user.role === "admin" ? `
+                              <select class="select" data-status-update="${report.id}" style="max-width:170px;">
+                                <option value="reported" ${report.status === "reported" ? "selected" : ""}>Reported</option>
+                                <option value="in-progress" ${report.status === "in-progress" ? "selected" : ""}>In progress</option>
+                                <option value="resolved" ${report.status === "resolved" ? "selected" : ""}>Resolved</option>
+                              </select>
+                            ` : ""}
+                            <button type="button" class="secondary-btn" data-action="toggle-edit" data-id="${report.id}">${state.editingId === report.id ? "Cancel" : "Edit"}</button>
+                            ${user && user.role === "admin" ? `<button type="button" class="danger-btn" data-action="delete-report" data-id="${report.id}">Delete</button>` : ""}
+                          </div>
+                        ` : ""}
+                      </div>
+                    </article>
+                  `;
+                })
+                .join("")
+            : `<div class="empty-state" style="grid-column:1 / -1;">No reports match.</div>`
+        }
+      </div>
+    </main>
+  `;
+}
+
+function renderContent() {
+  const user = getUser();
+  const reports = getReports();
+
+  if (activeRoute === "login") {
+    appRoot.innerHTML = renderLoginPage(user);
+    return;
+  }
+
+  if (activeRoute === "report") {
+    appRoot.innerHTML = renderReportPage(user);
+    return;
+  }
+
+  if (activeRoute === "reports") {
+    appRoot.innerHTML = renderReportsPage(user);
+    return;
+  }
+
+  if (activeRoute === "about") {
+    appRoot.innerHTML = renderAboutPage(user);
+    return;
+  }
+
+  appRoot.innerHTML = renderHomePage(reports, user);
+}
+
+function boot() {
+  if (!document || !document.body) {
+    return;
+  }
+
+  if (!document.getElementById(appRootId)) {
+    appRoot = document.createElement("div");
+    appRoot.id = appRootId;
+    document.body.appendChild(appRoot);
+  } else {
+    appRoot = document.getElementById(appRootId);
+  }
+
+  if (!document.getElementById("roadwatch-styles")) {
+    const cssNode = document.createElement("style");
+    cssNode.id = "roadwatch-styles";
+    cssNode.textContent = themeStyles;
+    document.head.appendChild(cssNode);
+  }
+
+  activeRoute = getRoute();
+  renderContent();
+}
+
+document.addEventListener("click", (event) => {
+  const navLink = event.target.closest("[data-route]");
+  if (navLink) {
+    event.preventDefault();
+    const nextRoute = navLink.getAttribute("data-route");
+    activeRoute = nextRoute || "home";
+    if (nextRoute === "home") {
+      window.location.hash = "#/";
+    } else {
+      window.location.hash = `#/${nextRoute}`;
+    }
+    renderContent();
+    return;
+  }
+
+  const statusFilter = event.target.closest("[data-status-filter]");
+  if (statusFilter) {
+    state.status = statusFilter.getAttribute("data-status-filter") || "all";
+    renderContent();
+    return;
+  }
+
+  const toggleEdit = event.target.closest("[data-action='toggle-edit']");
+  if (toggleEdit) {
+    const reportId = toggleEdit.getAttribute("data-id");
+    state.editingId = state.editingId === reportId ? null : reportId;
+    renderContent();
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-action='delete-report']");
+  if (deleteButton) {
+    const reportId = deleteButton.getAttribute("data-id");
+    const reports = getReports();
+    const nextReports = reports.filter((report) => report.id !== reportId);
+    setReports(nextReports);
+    renderContent();
+    return;
+  }
+
+  const logoutButton = event.target.closest("[data-action='logout']");
+  if (logoutButton) {
+    saveUser(null);
+    renderContent();
+  }
+
+  const locateButton = event.target.closest("[data-action='locate-gps']");
+  if (locateButton && navigator && navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition((position) => {
+      const locationField = document.querySelector("[name='location']");
+      if (!locationField) return;
+      const value = `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`;
+      locationField.value = value;
+    });
+  }
+});
+
+document.addEventListener("input", (event) => {
+  const searchField = event.target.closest("[data-search-input]");
+  if (searchField) {
+    state.search = searchField.value || "";
+    renderContent();
+  }
+
+  const radio = event.target.closest("input[type='radio'][name='role']");
+  if (radio) {
+    const parent = radio.closest(".toggle");
+    if (parent) {
+      document.querySelectorAll(".toggle").forEach((toggle) => toggle.classList.toggle("active", toggle.contains(radio)));
+    }
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const reportStatus = event.target.closest("[data-status-update]");
+  if (reportStatus) {
+    const reportId = reportStatus.getAttribute("data-status-update");
+    const value = reportStatus.value;
+    const reports = getReports();
+    const nextReports = reports.map((report) => (report.id === reportId ? { ...report, status: value } : report));
+    setReports(nextReports);
+    renderContent();
+  }
+
+  const fileInput = event.target.closest("input[type='file']");
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      const uploadBox = fileInput.closest(".upload-box");
+      if (!uploadBox) return;
+      const preview = uploadBox.querySelector("img");
+      if (preview) {
+        preview.src = String(reader.result);
+      } else {
+        const image = document.createElement("img");
+        image.src = String(reader.result);
+        uploadBox.insertBefore(image, uploadBox.firstChild);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+document.addEventListener("submit", (event) => {
+  const form = event.target;
+
+  if (form.matches("[data-form='login']")) {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const name = String(formData.get("name") || "").trim();
+    const role = String(formData.get("role") || "citizen");
+    if (!name) return;
+    saveUser({ name, role });
+    activeRoute = "reports";
+    window.location.hash = "#/reports";
+    renderContent();
+    return;
+  }
+
+  if (form.matches("[data-form='report-create']")) {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const user = getUser();
+    const location = String(formData.get("location") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+    if (!user || !location || !description) return;
+
+    const rawImage = formData.get("photo");
+    const reports = getReports();
+    const newReport = {
+      id: `r_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      location,
+      damageType: String(formData.get("damageType") || "Pothole"),
+      severity: String(formData.get("severity") || "medium"),
+      description,
+      image: undefined,
+      status: "reported",
+      reporter: user.name,
+      createdAt: Date.now(),
+    };
+
+    if (rawImage && rawImage instanceof File && rawImage.size > 0) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        newReport.image = String(reader.result);
+        setReports([newReport, ...reports]);
+        activeRoute = "reports";
+        window.location.hash = "#/reports";
+        renderContent();
+      };
+      reader.readAsDataURL(rawImage);
+      return;
+    }
+
+    setReports([newReport, ...reports]);
+    activeRoute = "reports";
+    window.location.hash = "#/reports";
+    renderContent();
+    return;
+  }
+
+  if (form.matches("[data-form='report-edit']")) {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const reportId = String(formData.get("reportId") || "");
+    const location = String(formData.get("location") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+    if (!reportId || !location || !description) return;
+
+    const reports = getReports();
+    const nextReports = reports.map((report) => {
+      if (report.id !== reportId) return report;
+      return { ...report, location, description };
+    });
+
+    setReports(nextReports);
+    state.editingId = null;
+    renderContent();
+  }
+});
+
+window.addEventListener("hashchange", () => {
+  activeRoute = getRoute();
+  renderContent();
+});
+
+boot();
